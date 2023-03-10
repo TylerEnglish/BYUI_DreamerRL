@@ -14,15 +14,27 @@ from sound import *
 from pathfinding import *
 import numpy as np
 import io
-import base64
-
+from io import BytesIO
+from PIL import Image
+import pandas as pd
+from numpy import save
+from numpy import savetxt
+import csv
 
 
 def convert_img_to_base64(screen):
     buffer = io.BytesIO()
     pg.image.save(screen, buffer)
     img_str = base64.b64encode(buffer.getvalue()).decode()
-    return img_str
+    image_data = base64.b64decode(img_str)
+    
+
+    # Create a BytesIO object from the decoded bytes
+    image = Image.open(io.BytesIO(image_data)) 
+    image_np = np.array(image)
+    return image_np
+    
+    
 
 class Game:
     def __init__(self):
@@ -37,14 +49,17 @@ class Game:
         self.data = {
             "Player_Loc": [],
             "Enemies": [],
-            "Kills": [],
-            "Img": []
+            "Kills": []
         }
+        self.img = []
+        self.img_file = open('data/img.csv', 'w', newline='')
+        self.img_writer = csv.writer(self.img_file)
+        self.updf = pd.DataFrame()
+        self.main_df = pd.DataFrame()
         pg.time.set_timer(self.global_event, 40)
         self.new_game()
 
     def new_game(self):
-        
         self.map = Map(self)
         self.player = Player(self)
         self.object_renderer = ObjectRenderer(self)
@@ -63,7 +78,7 @@ class Game:
         pg.display.flip()
         self.delta_time = self.clock.tick(FPS)
         pg.display.set_caption(f'{self.clock.get_fps() :.1f}')
-        self.data['Player_Loc']= [self.player.x,self.player.y] 
+        self.data['Player_Loc'].append([self.player.x,self.player.y])
         # Update enemy locations and other properties
         enemies = []
         for npc in self.object_handler.npc_list:
@@ -74,18 +89,24 @@ class Game:
                 # add any other properties of the enemy here
             }
             enemies.append(enemy)
-        self.data['Enemies'] = enemies
-        self.data['Kills'] = self.object_handler.kill_count
+        self.data['Enemies'].append(enemies)
+        self.data['Kills'].append(self.object_handler.kill_count)
         
         # Get the pixel values of the current screen image as a list of lists
-        self.data['Img'] = convert_img_to_base64(self.screen)
+        self.img.append(convert_img_to_base64(self.screen))
+        # Append the current image to the list
+        self.img.append(convert_img_to_base64(self.screen))
 
-        # Save data to JSON file
-        self.frame_counter += 1
-        if self.frame_counter == 5:
-            with open("data.json", "w") as f:
+        # Write the image data to the CSV file
+        self.img_writer.writerow(self.img[-1])
+        
+        # self.updf = pd.DataFrame(self.img)
+        # self.main_df.append(self.updf)
+        with open("data/g_stats.json", "w") as f:
                 json.dump(self.data, f)
-            self.frame_counter = 0
+        
+       
+        
 
     def draw(self):
         # self.screen.fill('black')
@@ -109,6 +130,10 @@ class Game:
             self.check_events()
             self.update()
             self.draw()
+
+    def __del__(self):
+        # Close the CSV file when the Game object is deleted
+        self.img_file.close()
 
 
 if __name__ == '__main__':
